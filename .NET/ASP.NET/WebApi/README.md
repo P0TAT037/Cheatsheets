@@ -103,9 +103,13 @@ To register a middleware we can do
 ```csharp
 app.Use(async (context, next) =>
 {
-    // logic
+    var stopwatch = new Stopwatch();
+    stopwatch.Start();
+    
     await next.Invoke();
-    // logic
+    
+    stopwatch.Stop();
+    Console.WriteLine($"Request [{context.Request.Path}] took [{stopwatch.Elapsed.Milliseconds}ms]");
 });
 ```
 Or
@@ -128,7 +132,9 @@ public class ProfilingMiddleware
     {
         var stopwatch = new Stopwatch();
         stopwatch.Start();
+        
         await _next(context);
+        
         stopwatch.Stop();
         Console.WriteLine($"Request [{context.Request.Path}] took [{stopwatch.Elapsed.Milliseconds}ms]");
     }
@@ -138,7 +144,73 @@ public class ProfilingMiddleware
 
 > Note that to get accurate results from this middleware it needs to be registered the first in the chain so it starts the timer before all the middlewares start and stops it after they all finish.
 
-You might be wondering how will we get the `next` request delegate and the `HttpContext` and where the class is even instantiated!! 
+You might be wondering how will we get the `next` request delegate and the `HttpContext` and where the class is even instantiated and called!!
+
+After finishing registering our Middleware pipeline we call the `Run` method
+
+```csharp
+app.Run();
+```
+this method prompts the host to start, which starts the services configured for our program. it takes responsibility of instantiating the needed classes and providing the parameters needed in their constructor.
+
+Actually one of the ways (and the most popular one) of getting an instance of a service we registered in the services container, is by adding it as a parameter in the class constructor, and when the host tries to instantiate that class it will provide it with an instance of the service from the container. This is called dependency injection.
+
+## Traditional Configuration of the WebApplication
+
+When creating a new asp.net api project with the default settings you'll get a ready to run code that implements a traditionally configured web application.
+
+you'll find that `Program.cs` has two parts
+
+In the first part the builder is created and the services are registered then the application is built.
+
+```c#
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+```
+There's three built-in service are being registered 
+
+- **`AddControllers()`** : Adds built-in services required for handling requests by a a controller.
+
+- **`AddEndpointsApiExplorer()`** : Adds services necessary for discovering and storing Api endpoints info especially when using minimal apis.
+
+- **`AddSwaggerGen()`** : Adds services required by swagger to run properly.
+
+In the second part, after we `Build()` the builder, we configure the middleware pipeline then we call `Run()` to start the services so the app starts listening for requests and responding to them.
+
+```csharp
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+```
+The registered middlewares here are
+- `UseSwagger()`: this middleware intercepts the requests coming to `swagger/v1/swagger.json/yaml` and returns a json/yaml that describes all the registered endpoints.
+
+- `UseSwaggerUI()` : this middleware intercepts the requests coming for `swagger/index.html` or `swagger/` and returns a page from which you can explore, try and tinker with the registered endpoints (and it needs the `UseSwagger()` middleware to be registered in order to work).
+
+- `UseHttpsRedirection()` : this one intercepts the requests if they are coming through `http` and returns a redirection response to the same endpoint but with `https`.
+
+- `UseAuthorization()` :
+
+- `MapControllers()` :
 
 ## HTTP Request Pipeline
 
