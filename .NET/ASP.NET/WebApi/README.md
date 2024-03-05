@@ -34,6 +34,7 @@ First We user the `CreateBuilder()` Method inside `WebApplication` class to get 
 ```csharp
 var builder = WebApplication.CreateBuilder();
 ```
+
 The builder allows us to add configuration sources and services
 
 ### configuration
@@ -43,6 +44,7 @@ Configuration is a set of variables with values that can be used throughout the 
 the builder allows us to add multiple sources to read the configuration from. one of the most popular sources are json files.
 
 ASP.NET reads configuration by default from some different sources like
+
 - appsettings.json (created by default)
 - Environment variables
 - command line arguments
@@ -50,9 +52,11 @@ ASP.NET reads configuration by default from some different sources like
 To add another source we call the suitable `Add` method in our `builder.Configuration`
 
 For example to add another json file
+
 ```csharp
 builder.Configuration.AddJson(@"path/to/json/file");
 ```
+
 Configuration variables can later be accessed using `builder.Configuration.GetSection("S1:V1")` or `builder.Configuration["S1:V1"]`
 
 > where "S1" is a json object that has a variable "V1" inside it.
@@ -62,6 +66,7 @@ We can also create a class to be the model of our configuration and binding an i
 ```csharp
 builder.Configuration.Bind(ConfigModelInstance);
 ```
+
 > where ConfigModelInstance is an instance of a model class that represents the json object used for configuration.
 
 ### Services
@@ -77,25 +82,28 @@ var InstantOfService = new Service();
 builder.Services.Singleton(InstanceOfService);
 builder.Services.AddTransient<IService, Service>();
 builder.Services.Scoped<IService, Service>();
-``` 
+```
+
 > Note: this way we can easily change the implementation of a service seamlessly without breaking anything only by providing another implementation to the `IService` interface.
 
 Each function of those register the service with a different lifetime.
 
 Then when a service is requested the container resolves it's dependencies and instantiates an object (if required).
 
-#### Service Lifetimes:
+#### Service Lifetimes
 
 - **Singleton**: the service is instantiated once and retrieved each time the service is requested.
 
 - **Scoped**: the service is instantiated once for every incoming request and the same instance is used each time it's requested during the whole journey of the http request processing pipeline.
 
-- **Transient**: a new instance of the service is created for every time it's requested. 
+- **Transient**: a new instance of the service is created for every time it's requested.
 
 After setting up our configuration settings and registering our required services we can call the `Build()` method to get our configured `WebApplication` object.
+
 ```csharp
 var app = builder.Build();
 ```
+
 the `WebApplication` object allows us to set the Middleware pipeline of the request.
 
 To register a middleware we can do
@@ -112,10 +120,13 @@ app.Use(async (context, next) =>
     Console.WriteLine($"Request [{context.Request.Path}] took [{stopwatch.Elapsed.Milliseconds}ms]");
 });
 ```
+
 Or
+
 ```csharp
 app.UseMiddleware<ProfilingMiddleware>();
 ```
+
 where `ProfilingMiddleware` is a class that has a function `Invoke`/`InvokeAsync` that takes the `HttpContext` as a parameter and the `RequestDelegate` of the next middleware in it's constructor
 
 ```csharp
@@ -140,6 +151,7 @@ public class ProfilingMiddleware
     }
 }
 ```
+
 > Here this middleware starts a stop watch and calls the request delegate of the next middleware in the chain, which will call the rest of the middlewares to the last one, then after it returns the time elapsed to process the request is printed in the console.
 
 > Note that to get accurate results from this middleware it needs to be registered the first in the chain so it starts the timer before all the middlewares start and stops it after they all finish.
@@ -151,13 +163,14 @@ After finishing registering our Middleware pipeline we call the `Run` method
 ```csharp
 app.Run();
 ```
+
 this method prompts the host to start, which starts the services configured for our program. it takes responsibility of instantiating the needed classes and providing the parameters needed in their constructor.
 
 Actually one of the ways (and the most popular one) of getting an instance of a service we registered in the services container, is by adding it as a parameter in the class constructor, and when the host tries to instantiate that class it will provide it with an instance of the service from the container. This is called dependency injection.
 
 ## Traditional Configuration of the WebApplication
 
-When creating a new asp.net api project with the default settings you'll get a ready to run code that implements a traditionally configured web application.
+When creating a new asp.net web api project with the default settings you'll get a project template that has one endpoint that serves pseudo wether forecast data.
 
 you'll find that `Program.cs` has two parts
 
@@ -175,9 +188,10 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 ```
-There's three built-in service are being registered 
 
-- **`AddControllers()`** : Adds built-in services required for handling requests by a a controller.
+There's three built-in service are being registered
+
+- **`AddControllers()`** : Adds built-in services required for handling requests by a controller.
 
 - **`AddEndpointsApiExplorer()`** : Adds services necessary for discovering and storing Api endpoints info especially when using minimal apis.
 
@@ -201,16 +215,29 @@ app.MapControllers();
 
 app.Run();
 ```
+
 The registered middlewares here are
+
 - `UseSwagger()`: this middleware intercepts the requests coming to `swagger/v1/swagger.json/yaml` and returns a json/yaml that describes all the registered endpoints.
 
 - `UseSwaggerUI()` : this middleware intercepts the requests coming for `swagger/index.html` or `swagger/` and returns a page from which you can explore, try and tinker with the registered endpoints (and it needs the `UseSwagger()` middleware to be registered in order to work).
 
 - `UseHttpsRedirection()` : this one intercepts the requests if they are coming through `http` and returns a redirection response to the same endpoint but with `https`.
 
-- `UseAuthorization()` :
+- `UseAuthorization()` : this makes sure the endpoint being requested is authorized to be accessed by this user. using the authorization policies set up in the first part (if any) while adding services (the `AddAuthorization()` service).
 
-- `MapControllers()` :
+The we got `MapControllers()` : this one maps the incoming request to the correct controller action that can handle it. in our case in this template project we have `Controllers/WeatherForecastController.cs` that has the controller class with a route attribute describing the route that should be mapped to it and inside it we have a function (action) that has an attribute describing the http method that it's mapped to it. so when a request comes in this form `GET https://[hostname:port]/weatherforecast` it will be mapped to our action inside WeatherForecastController.
+
+### Controllers?
+
+we mentioned controllers a couple of times in the previous section, but what are they?
+
+controllers are classes that implement the abstract class `ControllerBase` (in our case) or `Controller` (in the MVC case) which is a class that inherits from `ControllerBase` and adds some more functionality. The `ControllerBase`/`Controller` class has some helper methods and properties that makes it easier to access the request properties, handle the request and generate the response.
+
+Controller classes have the attribute `[ApiController]` which tells the framework that this class is a controller and it should be treated as such. and the `[Route]` attribute that tells the framework that this class should be mapped to the route specified in the attribute as mentioned earlier .
+> How to write the route pattern is out of the scope of this cheatsheet.
+
+The function inside the controller class are called actions and they might also have a `[Route]`, they are the functions that will be called when a request comes to the route that the controller is mapped to.
 
 ## HTTP Request Pipeline
 
@@ -219,8 +246,6 @@ The registered middlewares here are
 Middlewares are small "programs" or "functions" that are put in order and executed sequentially, each one of those receives the request as a parameter, it can do whatever it wants with it then it either passes this processed/modified/unchanged(if it wants) request to the next middleware in the sequence/pipeline (by calling it and passing the modified request reference), and since it's a function call our middleware can also do some processing after this function returns, or it can stop/short circuit the pipeline and return immediately.
 
 After receiving an Http request it's represented in the `HttpContext` object, then it goes through a pipeline of middlewares, each middleware can do some processing and pass the request to the next middleware as we said. After passing by every middleware in the pipeline, the request processing is done and the response by then is constructed and sent back to the client.
-
-### Creating a middleware
 
 ### Important Middlewares
 
