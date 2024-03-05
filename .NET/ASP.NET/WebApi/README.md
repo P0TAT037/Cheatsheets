@@ -4,7 +4,7 @@ It's simply a type of console applications which listens to HTTP requests, proce
 
 ## Create a WebApplication
 
-to start listening for the incoming HTTP requests, we need to spin up an http web server that listens on a certain port, and we need to implement the logic that will process requests and generate the response depending on the shape and type of the request.
+To start listening for the incoming HTTP requests, we need to spin up an http web server that listens on a certain port, and we need to implement the logic that will process requests and generate the response depending on the shape and type of the request.
 
 Asp.net provides us with a facade class called `WebApplication` that provides us with functions and properties that makes it easier for us to configure our application's "settings" to suite our needs.
 
@@ -16,9 +16,9 @@ one of these components (and probably the most important one) is the web server 
 
 the web server is responsible for listening for http requests, on receiving one it encapsulates it into an `HttpContext` object which is a type that contains all the info about the incoming request and it's response, then it calls a `RequestDelegate`, which is basically an async function that returns a `Task` passing the `HttpContext` object to it. the `RequestDelegate` calls a series of other `RequestDelegate`s internally, this is known as the "Middleware Pipeline", that take the `HttpContext` object one by one and process the request and might modify the `HttpContext` object.
 
-> Note that all the Middleware pipeline and request processing in not a part of nor the role of the web server, it all happens outside. the web server only passes the `HttpContext` object to the `RequestDelegate` and waits for the `Task` to complete.
+> Note that all the middleware pipeline and request processing in not a part of nor the role of the web server, it all happens outside. the web server only passes the `HttpContext` object to the `RequestDelegate` and waits for the `Task` to complete.
 
-the web server keeps a reference to the `HttpContext` it sends to the `RequestDelegate`, once the Task returned by the `RequestDelegate` is complete, the web server creates the Http response from the `HttpContext` (which is by now processed and modified) and sends that response back to the client over the network. This is the main role of the web server, dealing with the network.
+the web server keeps a reference to the `HttpContext` it sends to the `RequestDelegate`, once the Task returned by the `RequestDelegate` is complete, the web server creates the http response from the `HttpContext` (which is by now processed and modified) and sends that response back to the client over the network. This is the main role of the web server, dealing with the network.
 
 The web server implementation in Asp.net is called Kestrel, it's a cross-platform web server that is used by Asp.net to listen for incoming HTTP requests.
 Asp.net can also use other web servers like IIS, but Kestrel is the default one.
@@ -27,7 +27,7 @@ To use other third party web servers like IIS, a bridge is used to intercept the
 
 ## Configuring the WebApplication
 
-The `WebApplication` object that we mentioned earlier represents our "Application" that we want to create and configure to suite our needs.
+The `WebApplication` object that we mentioned earlier represents our "Application"/"server"/"web service" that we want to create and configure to suite our needs.
 
 First We user the `CreateBuilder()` Method inside `WebApplication` class to get a `WebApplicationBuilder` object.
 
@@ -35,13 +35,13 @@ First We user the `CreateBuilder()` Method inside `WebApplication` class to get 
 var builder = WebApplication.CreateBuilder();
 ```
 
-The builder allows us to add configuration sources and services
+The builder allows us to add (register) configuration sources and services
 
 ### configuration
 
-Configuration is a set of variables with values that can be used throughout the program to apply some settings. For example if we want to set a database connection string we can put it in a variable called "ConnectionString" in the configuration. and if we needed to change the database we can just change that variable.
+Configuration is a set of variables with values that can be used by the program to apply some settings. For example if we want to set a database connection string we can put it in a variable called "ConnectionString" in the configuration. and if we needed to change the database we can just change that variable.
 
-the builder allows us to add multiple sources to read the configuration from. one of the most popular sources are json files.
+the builder allows us to add multiple sources to read the configuration from. the most popular source being json files, specifically appsettings.json which is created by default in the new project template and automatically registered as a configuration source without explicitly registering it.
 
 ASP.NET reads configuration by default from some different sources like
 
@@ -61,13 +61,13 @@ Configuration variables can later be accessed using `builder.Configuration.GetSe
 
 > where "S1" is a json object that has a variable "V1" inside it.
 
-We can also create a class to be the model of our configuration and binding an instance of it to the configuration file.
+We can also create a class to be the model of our configuration and bind an instance of it to the configuration file.
 
 ```csharp
 builder.Configuration.Bind(ConfigModelInstance);
 ```
 
-> where ConfigModelInstance is an instance of a model class that represents the json object used for configuration.
+> where ConfigModelInstance is an instance of a model class that represents the configuration json object (have the same properties names and hierarchy).
 
 ### Services
 
@@ -197,6 +197,8 @@ There's three built-in service are being registered
 
 - **`AddSwaggerGen()`** : Adds services required by swagger to run properly.
 
+> Swagger is a tool that generates a documentation for your api. It can output it in the form of json or yaml and it also creates a web UI through which you can see the specifications of the registered endpoints and try them out.
+
 In the second part, after we `Build()` the builder, we configure the middleware pipeline then we call `Run()` to start the services so the app starts listening for requests and responding to them.
 
 ```csharp
@@ -218,7 +220,7 @@ app.Run();
 
 The registered middlewares here are
 
-- `UseSwagger()`: this middleware intercepts the requests coming to `swagger/v1/swagger.json/yaml` and returns a json/yaml that describes all the registered endpoints.
+- `UseSwagger()`: this middleware intercepts the requests coming to `swagger/v1/swagger.json/yaml` and returns a json/yaml object that describes all the registered endpoints.
 
 - `UseSwaggerUI()` : this middleware intercepts the requests coming for `swagger/index.html` or `swagger/` and returns a page from which you can explore, try and tinker with the registered endpoints (and it needs the `UseSwagger()` middleware to be registered in order to work).
 
@@ -226,7 +228,9 @@ The registered middlewares here are
 
 - `UseAuthorization()` : this makes sure the endpoint being requested is authorized to be accessed by this user. using the authorization policies set up in the first part (if any) while adding services (the `AddAuthorization()` service).
 
-The we got `MapControllers()` : this one maps the incoming request to the correct controller action that can handle it. in our case in this template project we have `Controllers/WeatherForecastController.cs` that has the controller class with a route attribute describing the route that should be mapped to it and inside it we have a function (action) that has an attribute describing the http method that it's mapped to it. so when a request comes in this form `GET https://[hostname:port]/weatherforecast` it will be mapped to our action inside WeatherForecastController.
+> It runs only if the endpoint has metadata that indicates it needs authorization. for example an action having the `[Authorize]` attribute. 
+
+The we got `MapControllers()` : this one is not a middleware, it's a function that creates an `Endpoint` object for every action in a controller and maps it to the "pattern" registered for it (for example `/store/products/[id=1]`). in our case in this template project in `Controllers/WeatherForecastController.cs` that has the controller class with a route attribute describing the route that should be mapped to it and inside it we have a function (action) that has an attribute describing the http method that is should be mapped to. so this pattern `GET [http/s]://[hostname:port]/WeatherForecast` will be mapped to our action inside WeatherForecastController (which is stored as an `Endpoint` by the routing system).
 
 ### Controllers?
 
@@ -237,7 +241,7 @@ controllers are classes that implement the abstract class `ControllerBase` (in o
 Controller classes have the attribute `[ApiController]` which tells the framework that this class is a controller and it should be treated as such. and the `[Route]` attribute that tells the framework that this class should be mapped to the route specified in the attribute as mentioned earlier .
 > How to write the route pattern is out of the scope of this cheatsheet.
 
-The function inside the controller class are called actions and they might also have a `[Route]`, they are the functions that will be called when a request comes to the route that the controller is mapped to.
+The functions inside the controller class are called actions and they might also have a `[Route]`, they are the functions that will be called when a request comes to the route that the controller is mapped to.
 
 ## HTTP Request Pipeline
 
@@ -247,7 +251,24 @@ Middlewares are small "programs" or "functions" that are put in order and execut
 
 After receiving an Http request it's represented in the `HttpContext` object, then it goes through a pipeline of middlewares, each middleware can do some processing and pass the request to the next middleware as we said. After passing by every middleware in the pipeline, the request processing is done and the response by then is constructed and sent back to the client.
 
-### Important Middlewares
+![middleware pipeline](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/index/_static/request-delegate-pipeline.png?view=aspnetcore-8.0)
+
+### Typical order of Middlewares
+
+All or some of the built-in middlewares in asp.net are usually registered by default in the project template depending on the project type.
+these middlewares are shown in the following diagram.
+
+![asp.net default request processing middleware pipeline](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/index/_static/middleware-pipeline.svg?view=aspnetcore-8.0)
+
+We will not go through them one by one but there are some points to understand here
+
+- The Routing middleware is responsible for matching the incoming request with a proper endpoint from the registered endpoints (it also might not find one that matches the request).
+
+- The Endpoint middleware is responsible for executing the `RequestDelegate` of the `Endpoint` matched for the request by the routing middleware.
+
+- If `UseRouting()` is not called explicitly The Routing middleware is registered by the framework automatically at the start of the pipeline or at the position shown in the diagram if one or more of the middlewares above it are registered.
+
+- If `UseEndpoints()` isn't called explicitly it's also automatically registered by the framework at the end of the pipeline.
 
 ### Action Filters
 
