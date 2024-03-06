@@ -243,6 +243,14 @@ Controller classes have the attribute `[ApiController]` which tells the framewor
 
 The functions inside the controller class are called actions and they might also have a `[Route]`, they are the functions that will be called when a request comes to the route that the controller is mapped to.
 
+### Minimal APIs
+
+you can also register api endpoints directly without using controllers using methods like `MapGet()` and `MapPost()` and the other similar methods instead of `MapControllers()`.
+
+```csharp
+app.MapGet("/", () => "Hello, world!");
+```
+
 ## HTTP Request Pipeline
 
 ### Middlewares
@@ -264,14 +272,33 @@ We will not go through them one by one but there are some points to understand h
 
 - The Routing middleware is responsible for matching the incoming request with a proper endpoint from the registered endpoints (it also might not find one that matches the request).
 
-- The Endpoint middleware is responsible for executing the `RequestDelegate` of the `Endpoint` matched for the request by the routing middleware.
+- The Endpoints middleware is responsible for executing the `RequestDelegate` of the `Endpoint` matched for the request by the routing middleware.
 
-- If `UseRouting()` is not called explicitly The Routing middleware is registered by the framework automatically at the start of the pipeline or at the position shown in the diagram if one or more of the middlewares above it are registered.
+- If `UseRouting()` is not called explicitly The Routing middleware is registered by the framework automatically at the start of the pipeline.
 
 - If `UseEndpoints()` isn't called explicitly it's also automatically registered by the framework at the end of the pipeline.
 
-### Action Filters
+### Endpoint Execution 
+
+There's a pipeline for endpoint execution similar to the middleware pipeline called "Action Invocation Pipeline" or "Filter Pipeline".
+
+#### Filters?
+
+A filter is a class that implements `I{something}Filter` interface and probably the `Attribute` abstract class, depending on the filter type the interface will have methods that takes runs before or after the execution of an action to do certain things.
+
+The following diagram shows the order of execution of the filters and how they interact with each other.
+
+![Filter Pipeline](https://learn.microsoft.com/en-us/aspnet/core/mvc/controllers/filters/_static/filter-pipeline-2.png?view=aspnetcore-8.0)
 
 ### Authorization Filters
+
+Authorization filters runs at the start of the filters pipeline, it has one method `OnAuthorization(AuthorizationFilterContext context)` that runs before the execution and inside it you write your own custom authorization logic.
+
+The `UseAuthorization()` middleware isn't involved in this process and isn't run, this filter only runs the logic inside `OnAuthorization`.
+
+It's generally recommended to use an authorization policy and let it be executed by the `UseAuthorization()` middleware instead of implementing custom authorization logic.
+> registering the authorization policies and authentication schemes are outside the scope of this cheatsheet
+
+Note that the `[Authorize]` Attribute is not an authorization filter it's just an indicator that the `UseAuthorization()` middleware needs to authorize the user (based on the registered policy, if any) before entering the action execution phase.
 
 ### Result Filters
