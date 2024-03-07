@@ -20,6 +20,8 @@ the web server is responsible for listening for http requests, on receiving one 
 
 the web server keeps a reference to the `HttpContext` it sends to the `RequestDelegate`, once the Task returned by the `RequestDelegate` is complete, the web server creates the http response from the `HttpContext` (which is by now processed and modified) and sends that response back to the client over the network. This is the main role of the web server, dealing with the network.
 
+This also means http requests in asp.net are processed asynchronously each on a thread from the thread pool.
+
 The web server implementation in Asp.net is called Kestrel, it's a cross-platform web server that is used by Asp.net to listen for incoming HTTP requests.
 Asp.net can also use other web servers like IIS, but Kestrel is the default one.
 
@@ -284,9 +286,9 @@ We will not go through them one by one but there are some points to understand h
 
 There's a pipeline for endpoint execution similar to the middleware pipeline called "Action Invocation Pipeline" or "Filter Pipeline".
 
-#### Filters?
+### Filters?
 
-A filter is a class that implements `I{something}Filter` interface and probably the `Attribute` abstract class, depending on the filter type the interface will have methods that takes runs before or after the execution of an action to do certain things.
+A filter is a class that implements `I{something}Filter` interface, depending on the filter type the interface will have methods that runs before or after the execution of an action to do certain things.
 
 The following diagram shows the order of execution of the filters and how they interact with each other.
 
@@ -307,11 +309,11 @@ Note that the `[Authorize]` Attribute is not an authorization filter it's just a
 
 Resource filters implement the interface `IResourceFilter` or `IAsyncResourceFilter` that has two methods that wrap the filters pipeline, `OnResourceExecuting[Async](ResourceExecutingContext)` executed after the authorization filter, and `OnResourceExecuted[Async](ResourceExecutedContext)` executed after the action execution.
 
-> Resource filters are executed before the Model Binding therefore teh ResourceExecutingContext has no access to the parameters passed to the action.
-
 Resource filters can be used to short circuit the action execution pipeline and return a response immediately. For example This can be used as a cache filter that checks if the response is already cached and if it is it returns it immediately without executing the action.
 
-### Model Binding
+> Resource filters are executed before the Model Binding therefore teh ResourceExecutingContext has no access to the parameters passed to the action.
+
+### Model Binding?
 
 Model is the process of converting the incoming request data to a model object that can be used by the action to do it's work. for example for a request coming on this path `/store/products/1?quantity=20` will be routed to an action like this `GetPrice(int id, int quantity)` with a `[Route("/store/products/{id}")]` attribute by the Routing middleware, in this requests case model binding stage will populate the id parameter from the last path segment, and quantity parameter from the query parameter `quantity`.
 
@@ -319,20 +321,109 @@ Model is the process of converting the incoming request data to a model object t
 
 ### Exception Filters
 
-Exception filters come into play after the action and action filters execution while the pipeline is returning. it handles the exception thrown by the controller creation, model binding, action filters or the action itself.
+Exception filters order of execution is after the resource filters and before the model binding but they come into play after the action and action filters execution is done while the pipeline is returning. they handle the exception thrown by the controller creation, model binding, action filters or the action itself.
 
 Exception filters implement the interface `IExceptionFilter` or `IAsyncExceptionFilter` that has the method `OnException[Async](ExceptionContext)` and it handles the exception by setting the `ExceptionHandled` property to true or setting the `Result` property.
 
 ### Action Filters
 
-Action filters are the most popular filter type, they are similar to and they implement the interface `IActionFilter` or `IAsyncActionFilter`. `IActionFilter` has two methods, `OnActionExecuting(ActionExecutingContext)` executed after the result filter and model binding is done and before the action itself, and `OnActionExecuted(ActionExecutedContext)` executed after the action execution.
+Action filters are the most popular filter type, they are similar to resource filters but since they come after model binding they have access to the action inputs.
+
+Action filters implement the interface `IActionFilter` or `IAsyncActionFilter`. `IActionFilter` has two methods, `OnActionExecuting(ActionExecutingContext)` executed before the action, and `OnActionExecuted(ActionExecutedContext)` executed after the action.
 
 The `ActionExecutingContext` has access to the inputs of the action through `ActionArguments` property, the controller instance through `Controller` property, and a `Result` Property that if set short-circuits the execution of the action and the subsequent action filters.
 
-The `ActionExecutedContext` provides `Controller` and `Result` in addition to `Canceled` that is set to True if the action execution was short-circuited by another filter, and `Exception` that is not null if the action or any action filter threw an exception (resetting it to null handles the exception).
+The `ActionExecutedContext` provides `Controller` and `Result` in addition to the `Canceled` property that is set to True if the action execution was short-circuited by another filter, and the `Exception` property that is not null if the action or any action filter threw an exception (resetting it to null handles the exception).
 
-`IAsyncActionFilter` only has `OnActionExecutionAsync(ActionExecutionContext, ActionExecutionDelegate)`. you can use the next delegate to perform logic before and after it, or short-circuit by not calling it. the `ActionExecutionDelegate` returns the `ActionExecutedContext`.
+`IAsyncActionFilter` interface can also be used for action filters. It only has `OnActionExecutionAsync(ActionExecutionContext, ActionExecutionDelegate)`. you can use the next delegate to perform logic before and after it, or short-circuit by not calling it at all. the `ActionExecutionDelegate` returns the `ActionExecutedContext`.
 
 Action filters can be used to do things like validating model state or logging.
 
+### Result Execution
+
+After The action and it's filters are done executing, if the return type of the action was not of the type `IActionResult` it's converted/put into `IActionResult` object. the `IActionResult` interface has got a function called `ExecuteResultAsync(ActionContext)` this method is called after the execution of the action and it's filters to edit (set the state of) the `HttpContext` and put the result into it based on the result type.
+
+> After the result execution the web server (Kestrel) constructs the http response from this processed `HttpContext` and sends it back to the client.
+
 ### Result Filters
+
+Result Filters implement the interface `IResultFilter` which has two methods. `OnResultExecuting(ResultExecutingContext)`, runs before the Result Execution, and `OnResultExecuted(ResultExecutedContext)`, runs after the Result Execution.
+
+Like the action filters, result filters can implement `IAsyncResultFilter` which has a `OnResultExecutionAsync(ResultExecutingContext, ResultExecutionDelegate)` and the `ResultExecutionDelegate` returns the `ResultExecutedContext`.
+
+Of course if the authorization filter, resource filter, action filters threw an exception or short-circuited the request, or the action itself threw an exception, the result filters will not be executed and the exception might be handled by the exception filter if any.
+
+but if you use `IAlwaysRunResultFilter` or `IAsyncAlwaysRunResultFilter` to implement your result filter the result filters will always run even if the Endpoint processing is short-circuited or an exception has been thrown.
+
+#### Add a filter to your action
+
+#### Global Filters
+
+you can add a global filter to all of the actions in your application using the controllers service options while adding it to the service container.
+
+``` csharp
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add(typeof(ExampleFilter));
+    });
+```
+
+#### Non-global Filters
+
+can be added by adding them as an attribute to your action/controller.
+
+- **Method 1 :** implement the `Attribute` abstract class alongside with the filter interface and add it an attribute to the controller/action.
+
+- **Method 2 :** instead of directly implementing the `IAction{something}` interface of the filter implement one of the `FilterAttribute` abstract classes provided by asp.net (eg. `ActionFilterAttribute`) and override the methods in it. then add the filter on top of the action/controller as an attribute.
+
+#### ServiceFilterAttribute
+
+register the filter as a service in the services container and add it as a Service Filter attribute
+
+```csharp
+[ServiceFilter<ExampleFilter>]
+public IActionResult WithServiceFilter() => Ok();
+```
+
+This way a new Filter instance will be created and it's dependencies will be resolved from the Services/Dependency Injection (DI) container
+
+new instance will be created every time the filter is requested.
+
+> `ServiceFilterAttribute.IsReusable` might be a way to reuse the filter instance sometimes but it's outside of the scope of this cheatsheet.
+
+#### TypeFilterAttribute
+
+`TypeFilterAttribute` is similar to `ServiceFilterAttribute`, but its type isn't resolved directly from the DI container.
+
+TypeFilterAttribute can optionally accept constructor arguments for the type.
+
+```csharp
+[TypeFilter(typeof(ExampleFilter), 
+Arguments = new object[] { "Example-Param1", "Example-Param2" })]
+public IActionResult WithServiceFilter() => Ok();
+```
+
+as well as the `ServiceFilterAttribute` new instance will be created every time the filters is requested.
+
+> `TypeFilterAttribute.IsReusable` might be a way to reuse the filter instance sometimes but it's outside of the scope of this cheatsheet.
+
+### Minimal APIs Endpoint Execution
+
+All we were talking about was all about the MVC (Model-View-Controller) Endpoint Execution pipeline, though we don't have Views in the web api, it does not apply to the minimal api endpoints registered like this
+
+```csharp
+app.MapGet("/", () => "Hello, world!");
+```
+
+to add filters to this endpoint you create a class that implements the `IEndpointFilter` and add it this way.
+
+```csharp
+app.MapGet("/", () => "Hello, world!").
+AddEndpointFilter<ExampleFilter>();
+```
+
+> `IEndpointFilter` has one method `InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)`  
+
+_ _ _
+
+### *That's it, now you know.*
