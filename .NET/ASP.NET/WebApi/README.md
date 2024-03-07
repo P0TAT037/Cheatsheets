@@ -303,4 +303,36 @@ It's generally recommended to use an authorization policy and let it be executed
 
 Note that the `[Authorize]` Attribute is not an authorization filter it's just an indicator that the `UseAuthorization()` middleware needs to authorize the user (based on the registered policy, if any) before entering the action execution phase.
 
+### Resource Filters
+
+Resource filters implement the interface `IResourceFilter` or `IAsyncResourceFilter` that has two methods that wrap the filters pipeline, `OnResourceExecuting[Async](ResourceExecutingContext)` executed after the authorization filter, and `OnResourceExecuted[Async](ResourceExecutedContext)` executed after the action execution.
+
+> Resource filters are executed before the Model Binding therefore teh ResourceExecutingContext has no access to the parameters passed to the action.
+
+Resource filters can be used to short circuit the action execution pipeline and return a response immediately. For example This can be used as a cache filter that checks if the response is already cached and if it is it returns it immediately without executing the action.
+
+### Model Binding
+
+Model is the process of converting the incoming request data to a model object that can be used by the action to do it's work. for example for a request coming on this path `/store/products/1?quantity=20` will be routed to an action like this `GetPrice(int id, int quantity)` with a `[Route("/store/products/{id}")]` attribute by the Routing middleware, in this requests case model binding stage will populate the id parameter from the last path segment, and quantity parameter from the query parameter `quantity`.
+
+> How model binding stage maps the parameters in the request to the action parameters based on the route pattern of the action is out of the scope of this cheatsheet.
+
+### Exception Filters
+
+Exception filters come into play after the action and action filters execution while the pipeline is returning. it handles the exception thrown by the controller creation, model binding, action filters or the action itself.
+
+Exception filters implement the interface `IExceptionFilter` or `IAsyncExceptionFilter` that has the method `OnException[Async](ExceptionContext)` and it handles the exception by setting the `ExceptionHandled` property to true or setting the `Result` property.
+
+### Action Filters
+
+Action filters are the most popular filter type, they are similar to and they implement the interface `IActionFilter` or `IAsyncActionFilter`. `IActionFilter` has two methods, `OnActionExecuting(ActionExecutingContext)` executed after the result filter and model binding is done and before the action itself, and `OnActionExecuted(ActionExecutedContext)` executed after the action execution.
+
+The `ActionExecutingContext` has access to the inputs of the action through `ActionArguments` property, the controller instance through `Controller` property, and a `Result` Property that if set short-circuits the execution of the action and the subsequent action filters.
+
+The `ActionExecutedContext` provides `Controller` and `Result` in addition to `Canceled` that is set to True if the action execution was short-circuited by another filter, and `Exception` that is not null if the action or any action filter threw an exception (resetting it to null handles the exception).
+
+`IAsyncActionFilter` only has `OnActionExecutionAsync(ActionExecutionContext, ActionExecutionDelegate)`. you can use the next delegate to perform logic before and after it, or short-circuit by not calling it. the `ActionExecutionDelegate` returns the `ActionExecutedContext`.
+
+Action filters can be used to do things like validating model state or logging.
+
 ### Result Filters
