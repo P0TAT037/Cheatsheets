@@ -270,6 +270,8 @@ We will not go through them one by one but there are some points to understand h
 
 - If `UseEndpoints()` isn't called explicitly it's also automatically registered by the framework at the end of the pipeline.
 
+`UseEndpoints()` starts the the action execution sequence.
+
 ### Action Filters
 
 ### Authorization Filters
