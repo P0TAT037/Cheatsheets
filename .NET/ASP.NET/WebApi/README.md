@@ -155,7 +155,7 @@ public class ProfilingMiddleware
 ```
 
 > Here this middleware starts a stop watch and calls the request delegate of the next middleware in the chain, which will call the rest of the middlewares to the last one, then after it returns the time elapsed to process the request is printed in the console.
-
+\
 > Note that to get accurate results from this middleware it needs to be registered the first in the chain so it starts the timer before all the middlewares start and stops it after they all finish.
 
 You might be wondering how will we get the `next` request delegate and the `HttpContext` and where the class is even instantiated and called!!
