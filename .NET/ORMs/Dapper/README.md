@@ -145,3 +145,5 @@ var customer = connection.Query<Customer>(sql, new { Email = dbParams })
 _ _ _
 
 ### *That's it, now you know.*
+
+Learn more about Dapper [here](https://www.learndapper.com/)
