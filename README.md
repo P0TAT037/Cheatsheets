@@ -12,3 +12,4 @@
 
 - [ORMs](./.NET/ORMs/)
   - [Dapper](./.NET/ORMs/Dapper/README.md/#dapper)
+  - [EF Core](./.NET/ORMs/EF-Core/README.md/#ef-core)
